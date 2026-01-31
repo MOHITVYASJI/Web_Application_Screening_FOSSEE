@@ -43,8 +43,28 @@ def parse_csv_file(file):
         content = file.read().decode('utf-8')
         df = pd.read_csv(StringIO(content))
         
-        # Clean column names (remove extra spaces)
+        # Clean column names (remove extra spaces and standardize)
         df.columns = df.columns.str.strip()
+        
+        # Normalize column names - replace spaces with underscores for consistency
+        # This handles both "Equipment Name" and "Equipment_Name" formats
+        column_mapping = {}
+        for col in df.columns:
+            normalized = col.replace(' ', '_')
+            if normalized != col:
+                column_mapping[col] = normalized
+        
+        if column_mapping:
+            df.rename(columns=column_mapping, inplace=True)
+        
+        # Verify required columns exist after normalization
+        required_cols = ['Equipment_Name', 'Type', 'Flowrate', 'Pressure', 'Temperature']
+        missing_cols = set(required_cols) - set(df.columns)
+        if missing_cols:
+            raise ValueError(
+                f"Missing required columns: {', '.join(missing_cols)}. "
+                f"Found columns: {', '.join(df.columns)}"
+            )
         
         # Fill missing values with appropriate defaults
         # For numeric columns, use mean

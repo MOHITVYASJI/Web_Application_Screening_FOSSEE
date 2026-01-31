@@ -109,12 +109,14 @@ class DatasetUploadSerializer(serializers.Serializer):
     """
     file = serializers.FileField()
     
-    # Required columns in CSV
+    # Required columns in CSV (accepts both underscore and space versions)
     REQUIRED_COLUMNS = ['Equipment_Name', 'Type', 'Flowrate', 'Pressure', 'Temperature']
+    REQUIRED_COLUMNS_ALT = ['Equipment Name', 'Type', 'Flowrate', 'Pressure', 'Temperature']
     
     def validate_file(self, file):
         """
         Validate uploaded CSV file.
+        Accepts both "Equipment_Name" and "Equipment Name" column formats.
         """
         # Check file extension
         if not file.name.endswith('.csv'):
@@ -140,12 +142,19 @@ class DatasetUploadSerializer(serializers.Serializer):
                     "CSV file is empty. Please upload a file with data."
                 )
             
-            # Validate required columns
-            missing_columns = set(self.REQUIRED_COLUMNS) - set(df.columns)
+            # Clean column names
+            df.columns = df.columns.str.strip()
+            
+            # Normalize column names for validation
+            normalized_columns = [col.replace(' ', '_') for col in df.columns]
+            
+            # Validate required columns (check normalized version)
+            missing_columns = set(self.REQUIRED_COLUMNS) - set(normalized_columns)
             if missing_columns:
                 raise serializers.ValidationError(
                     f"Missing required columns: {', '.join(missing_columns)}. "
-                    f"Required columns are: {', '.join(self.REQUIRED_COLUMNS)}"
+                    f"Required columns are: Equipment Name (or Equipment_Name), Type, Flowrate, Pressure, Temperature. "
+                    f"Found columns: {', '.join(df.columns)}"
                 )
             
             # Validate numeric columns
