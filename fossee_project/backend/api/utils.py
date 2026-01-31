@@ -25,73 +25,53 @@ from datetime import datetime
 import json
 
 
-def parse_csv_file(file):
+def parse_csv_file(csv_file):
     """
-    Parse uploaded CSV file and return DataFrame with cleaned data.
-    
-    Args:
-        file: Django UploadedFile object
-    
-    Returns:
-        tuple: (pandas.DataFrame, dict with metadata)
-    
-    Raises:
-        ValueError: If CSV is invalid or missing required columns
+    Parse and normalize CSV file.
+
+    - Handles both 'Equipment Name' and 'Equipment_Name'
+    - Normalizes column names
+    - Returns clean DataFrame
     """
     try:
-        # Read CSV content
-        content = file.read().decode('utf-8')
+        csv_file.seek(0)
+        content = csv_file.read().decode('utf-8')
         df = pd.read_csv(StringIO(content))
-        
-        # Clean column names (remove extra spaces and standardize)
-        df.columns = df.columns.str.strip()
-        
-        # Normalize column names - replace spaces with underscores for consistency
-        # This handles both "Equipment Name" and "Equipment_Name" formats
-        column_mapping = {}
-        for col in df.columns:
-            normalized = col.replace(' ', '_')
-            if normalized != col:
-                column_mapping[col] = normalized
-        
-        if column_mapping:
-            df.rename(columns=column_mapping, inplace=True)
-        
-        # Verify required columns exist after normalization
-        required_cols = ['Equipment_Name', 'Type', 'Flowrate', 'Pressure', 'Temperature']
-        missing_cols = set(required_cols) - set(df.columns)
-        if missing_cols:
+
+        if df.empty:
+            raise ValueError("CSV file contains no data")
+
+        # 🔥 NORMALIZE COLUMN NAMES (CRITICAL FIX)
+        df.columns = (
+            df.columns
+            .str.strip()
+            .str.replace(' ', '_')
+        )
+
+        # Required columns (normalized)
+        required_columns = [
+            'Equipment_Name',
+            'Type',
+            'Flowrate',
+            'Pressure',
+            'Temperature'
+        ]
+
+        missing = set(required_columns) - set(df.columns)
+        if missing:
             raise ValueError(
-                f"Missing required columns: {', '.join(missing_cols)}. "
-                f"Found columns: {', '.join(df.columns)}"
+                f"Missing required columns: {', '.join(missing)}"
             )
-        
-        # Fill missing values with appropriate defaults
-        # For numeric columns, use mean
-        numeric_cols = ['Flowrate', 'Pressure', 'Temperature']
-        for col in numeric_cols:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-                df[col].fillna(df[col].mean(), inplace=True)
-        
-        # For string columns, use 'Unknown'
-        string_cols = ['Equipment_Name', 'Type']
-        for col in string_cols:
-            if col in df.columns:
-                df[col].fillna('Unknown', inplace=True)
-        
-        # Create metadata
+
         metadata = {
-            'total_rows': len(df),
-            'columns': list(df.columns),
-            'file_size': file.size,
-            'file_name': file.name,
+            "rows": len(df),
+            "columns": list(df.columns)
         }
-        
+
         return df, metadata
-        
+
     except Exception as e:
-        raise ValueError(f"Error parsing CSV file: {str(e)}")
+        raise ValueError(str(e))
 
 
 def calculate_statistics(df):
